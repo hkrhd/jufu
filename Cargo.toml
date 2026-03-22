@@ -2,6 +2,11 @@
 name = "jufu"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+description = "Jujutsu log viewer TUI inspired by keifu"
+homepage = "https://github.com/hkrhd/jufu"
+repository = "https://github.com/hkrhd/jufu"
+readme = "README.md"
 
 [profile.dist]
 inherits = "release"
