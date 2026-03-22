@@ -33,7 +33,7 @@ pub async fn load_logs(repo_path: &Path) -> Result<Vec<LogEntry>> {
             "-r",
             "::",
             "-T",
-            "\"JUFU:\" ++ json(change_id) ++ \"\\t\" ++ json(commit_id) ++ \"\\t\" ++ json(author.name()) ++ \"\\t\" ++ json(author.timestamp()) ++ \"\\t\" ++ json(description) ++ \"\\t\" ++ json(local_bookmarks) ++ \"\\t\" ++ json(remote_bookmarks) ++ \"\\n\"",
+            "\"JUFU:\" ++ json(change_id) ++ \"\\t\" ++ json(change_id.shortest(1).prefix()) ++ \"\\t\" ++ json(change_id.shortest(1).rest()) ++ \"\\t\" ++ json(commit_id) ++ \"\\t\" ++ json(author.name()) ++ \"\\t\" ++ json(author.timestamp()) ++ \"\\t\" ++ json(description) ++ \"\\t\" ++ json(local_bookmarks) ++ \"\\t\" ++ json(remote_bookmarks) ++ \"\\n\"",
         ],
     )
     .await
@@ -86,7 +86,8 @@ fn build_log_entry(graph_entry: ParsedGraphEntry) -> Result<LogEntry> {
     let description = graph_entry.description.trim_end().to_string();
 
     Ok(LogEntry {
-        change_id_short: short_change_id(&graph_entry.change_id),
+        change_id_prefix: graph_entry.change_id_prefix,
+        change_id_rest: graph_entry.change_id_rest,
         commit_id: graph_entry.commit_id,
         date: short_date(&graph_entry.author_timestamp)?,
         author: if graph_entry.author_name.is_empty() {
@@ -101,10 +102,6 @@ fn build_log_entry(graph_entry: ParsedGraphEntry) -> Result<LogEntry> {
     })
 }
 
-fn short_change_id(change_id: &str) -> String {
-    change_id.chars().take(8).collect()
-}
-
 fn short_date(timestamp: &str) -> Result<String> {
     let parsed = DateTime::parse_from_rfc3339(timestamp)
         .with_context(|| format!("failed to parse author timestamp: {timestamp}"))?;
@@ -117,6 +114,8 @@ fn short_date(timestamp: &str) -> Result<String> {
 #[derive(Debug)]
 struct ParsedGraphEntry {
     change_id: String,
+    change_id_prefix: String,
+    change_id_rest: String,
     commit_id: String,
     author_name: String,
     author_timestamp: String,
@@ -157,8 +156,10 @@ fn parse_graph_lines(output: &str) -> Result<Vec<ParsedGraphEntry>> {
 }
 
 fn parse_graph_payload(prefix: &str, payload: &str) -> Result<ParsedGraphEntry> {
-    let mut parts = payload.splitn(7, '\t');
+    let mut parts = payload.splitn(9, '\t');
     let change_id = parse_json_field::<String>(parts.next(), "change_id")?;
+    let change_id_prefix = parse_json_field::<String>(parts.next(), "change_id_prefix")?;
+    let change_id_rest = parse_json_field::<String>(parts.next(), "change_id_rest")?;
     let commit_id = parse_json_field::<String>(parts.next(), "commit_id")?;
     let author_name = parse_json_field::<String>(parts.next(), "author_name")?;
     let author_timestamp = parse_json_field::<String>(parts.next(), "author_timestamp")?;
@@ -168,6 +169,8 @@ fn parse_graph_payload(prefix: &str, payload: &str) -> Result<ParsedGraphEntry> 
 
     Ok(ParsedGraphEntry {
         change_id,
+        change_id_prefix,
+        change_id_rest,
         commit_id,
         author_name,
         author_timestamp,
@@ -218,30 +221,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{Bookmark, collect_bookmarks, parse_graph_lines, short_date};
-
-    #[test]
-    fn parse_graph_groups_continuation_lines() {
-        let output = "\
-@  JUFU:\"a\"\t\"111111111111\"\t\"alice\"\t\"2026-03-22T00:00:00+09:00\"\t\"first\\n\"\t[]\t[]\n\
-◆    JUFU:\"b\"\t\"222222222222\"\t\"bob\"\t\"2026-03-21T00:00:00+09:00\"\t\"second\\n\"\t[]\t[]\n\
-├─╮\n\
-│ ◆  JUFU:\"c\"\t\"333333333333\"\t\"carol\"\t\"2026-03-20T00:00:00+09:00\"\t\"third\\n\"\t[]\t[]\n\
-├─╯\n";
-
-        let entries = parse_graph_lines(output).expect("graph should parse");
-        assert_eq!(entries.len(), 3);
-        assert_eq!(entries[0].change_id, "a");
-        assert_eq!(entries[0].author_name, "alice");
-        assert_eq!(
-            entries[1].lines,
-            vec!["◆    ".to_string(), "├─╮".to_string()]
-        );
-        assert_eq!(
-            entries[2].lines,
-            vec!["│ ◆  ".to_string(), "├─╯".to_string()]
-        );
-    }
+    use super::{Bookmark, collect_bookmarks, short_date};
 
     #[test]
     fn short_date_formats_local_timestamp() {

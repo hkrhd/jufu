@@ -9,7 +9,8 @@ pub struct AppConfig {
 #[derive(Clone, Debug, Default)]
 pub struct LogEntry {
     pub change_id: String,
-    pub change_id_short: String,
+    pub change_id_prefix: String,
+    pub change_id_rest: String,
     pub commit_id: String,
     pub date: String,
     pub author: String,
