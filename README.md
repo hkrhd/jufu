@@ -1,6 +1,6 @@
 # jufu
 
-Jujutsu log viewer TUI inspired by keifu.
+Jujutsu log viewer TUI
 
 ## Install
 
@@ -26,5 +26,5 @@ Releases are published from GitHub Actions.
 ## Development
 
 ```bash
-cargo run
+cargo run --manifest-path path/to/project/Cargo.toml
 ```
