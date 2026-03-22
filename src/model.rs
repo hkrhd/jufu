@@ -10,11 +10,10 @@ pub struct AppConfig {
 pub struct LogEntry {
     pub change_id: String,
     pub change_id_short: String,
-    pub commit_id_short: String,
+    pub commit_id: String,
     pub date: String,
     pub author: String,
     pub description: String,
-    pub description_first_line: String,
     pub bookmarks: Vec<String>,
     pub graph_lines: Vec<String>,
 }
