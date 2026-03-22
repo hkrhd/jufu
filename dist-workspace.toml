@@ -1,0 +1,10 @@
+[dist]
+cargo-dist-version = "0.31.0"
+ci = ["github"]
+installers = []
+targets = [
+  "aarch64-apple-darwin",
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+]
+
