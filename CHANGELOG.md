@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2](https://github.com/hkrhd/jufu/compare/v0.1.1...v0.1.2) - 2026-03-23
+
+### Other
+
+- Add auto-merge for release-plz release PRs
+- Release 成功後に cargo install / brew install の smoke workflow を追加
+
 ## [0.1.1](https://github.com/hkrhd/jufu/compare/v0.1.0...v0.1.1) - 2026-03-23
 
 ### Other
