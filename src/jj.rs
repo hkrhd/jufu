@@ -2,7 +2,7 @@ use std::path::Path;
 use std::process::Stdio;
 
 use anyhow::{Context, Result, anyhow, bail};
-use chrono::{DateTime, Local};
+use chrono::DateTime;
 use serde::Deserialize;
 use std::collections::HashSet;
 use tokio::process::Command;
@@ -105,10 +105,7 @@ fn build_log_entry(graph_entry: ParsedGraphEntry) -> Result<LogEntry> {
 fn short_date(timestamp: &str) -> Result<String> {
     let parsed = DateTime::parse_from_rfc3339(timestamp)
         .with_context(|| format!("failed to parse author timestamp: {timestamp}"))?;
-    Ok(parsed
-        .with_timezone(&Local)
-        .format("%y%m%dT%H:%M")
-        .to_string())
+    Ok(parsed.format("%y%m%dT%H:%M").to_string())
 }
 
 #[derive(Debug)]
