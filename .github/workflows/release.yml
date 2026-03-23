@@ -293,7 +293,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: true
-          repository: "hkrhd/homebrew-jufu"
+          repository: "hkrhd/homebrew-tap"
           token: ${{ secrets.FGPAT_RELEASE_TAP }}
       # So we have access to the formula
       - name: Fetch homebrew formulae

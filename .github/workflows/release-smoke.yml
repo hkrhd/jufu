@@ -43,7 +43,9 @@ jobs:
       HOMEBREW_NO_AUTO_UPDATE: "1"
     steps:
       - name: Install released formula from tap
-        run: brew install hkrhd/jufu/jufu
+        run: |
+          brew tap hkrhd/homebrew-tap
+          brew install hkrhd/homebrew-tap/jufu
       - name: Verify installed binary version
         run: |
           actual="$(jufu --version)"

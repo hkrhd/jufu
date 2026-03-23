@@ -13,7 +13,8 @@ cargo install jufu
 ### Homebrew / Linuxbrew
 
 ```bash
-brew install hkrhd/homebrew-jufu/jufu
+brew tap hkrhd/homebrew-tap
+brew install hkrhd/homebrew-tap/jufu
 ```
 
 ## Release
