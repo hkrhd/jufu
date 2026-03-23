@@ -55,3 +55,37 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.FGPAT_RELEASE_TAP }}
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+      - name: Find release PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.FGPAT_RELEASE_TAP }}
+        run: |
+          pr_number=""
+          for _ in $(seq 1 12); do
+            pr_number="$(gh pr list --state open --base main --json number,title,headRefName,updatedAt --jq 'map(select(.title == "release-plz: prepare release" and (.headRefName | startswith("release-plz-")))) | sort_by(.updatedAt) | last | .number // empty')"
+            if [ -n "$pr_number" ]; then
+              break
+            fi
+            sleep 5
+          done
+
+          if [ -z "$pr_number" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "number=$pr_number" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for checks
+        if: ${{ steps.pr.outputs.found == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.FGPAT_RELEASE_TAP }}
+        run: gh pr checks "${{ steps.pr.outputs.number }}" --watch --fail-fast
+
+      - name: Merge release PR
+        if: ${{ steps.pr.outputs.found == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.FGPAT_RELEASE_TAP }}
+        run: gh pr merge "${{ steps.pr.outputs.number }}" --merge --delete-branch

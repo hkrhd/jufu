@@ -1,5 +1,5 @@
 [workspace]
 changelog_update = true
+release_always = false
 git_release_enable = false
 pr_name = "release-plz: prepare release"
-

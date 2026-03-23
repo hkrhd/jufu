@@ -20,8 +20,9 @@ brew install hkrhd/homebrew-jufu/jufu
 
 Releases are published from GitHub Actions.
 
-- `release-plz` creates the release PR, publishes to crates.io, and pushes the `v*` tag.
-- `dist` builds release artifacts for macOS arm64, Linux x86_64, and Linux arm64, creates the GitHub Release, and updates the Homebrew tap.
+- Push to `main` to create or update the release PR.
+- The `release-plz: prepare release` PR is auto-merged after CI passes.
+- The merge triggers the `Release` workflow, which publishes to crates.io, pushes the `v*` tag, creates the GitHub Release, updates the Homebrew tap, and runs the smoke workflow to verify `cargo install` and `brew install`.
 
 ## Development
 
