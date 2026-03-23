@@ -82,7 +82,18 @@ jobs:
         if: ${{ steps.pr.outputs.found == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.FGPAT_RELEASE_TAP }}
-        run: gh pr checks "${{ steps.pr.outputs.number }}" --watch --fail-fast
+        run: |
+          for _ in $(seq 1 24); do
+            check_count="$(gh pr view "${{ steps.pr.outputs.number }}" --json statusCheckRollup --jq '.statusCheckRollup | length')"
+            if [ "$check_count" -gt 0 ]; then
+              gh pr checks "${{ steps.pr.outputs.number }}" --watch --fail-fast
+              exit $?
+            fi
+            sleep 10
+          done
+
+          echo "timed out waiting for checks to appear on PR ${{ steps.pr.outputs.number }}" >&2
+          exit 1
 
       - name: Merge release PR
         if: ${{ steps.pr.outputs.found == 'true' }}
