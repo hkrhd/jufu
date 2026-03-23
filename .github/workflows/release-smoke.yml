@@ -1,0 +1,51 @@
+name: Release Smoke
+
+on:
+  workflow_run:
+    workflows: ["Release"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  wait-for-release:
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' && startsWith(github.event.workflow_run.head_branch, 'v') }}
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - id: version
+        run: |
+          tag="${{ github.event.workflow_run.head_branch }}"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
+      - name: Wait for registries to reflect the release
+        run: sleep 180
+
+  cargo-install:
+    needs: wait-for-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install released crate from crates.io
+        run: cargo install jufu --version "${{ needs.wait-for-release.outputs.version }}"
+      - name: Verify installed binary version
+        run: |
+          actual="$(~/.cargo/bin/jufu --version)"
+          expected="jufu ${{ needs.wait-for-release.outputs.version }}"
+          test "$actual" = "$expected"
+
+  brew-install:
+    needs: wait-for-release
+    runs-on: macos-14
+    env:
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+    steps:
+      - name: Install released formula from tap
+        run: brew install hkrhd/jufu/jufu
+      - name: Verify installed binary version
+        run: |
+          actual="$(jufu --version)"
+          expected="jufu ${{ needs.wait-for-release.outputs.version }}"
+          test "$actual" = "$expected"
