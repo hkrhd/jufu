@@ -1,0 +1,31 @@
+name: Release-plz Auto Merge
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: release-plz-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  merge:
+    if: ${{ github.event.pull_request.base.ref == 'main' && github.event.pull_request.base.repo.full_name == github.repository && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.title == 'release-plz: prepare release' && startsWith(github.event.pull_request.head.ref, 'release-plz-') }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.FGPAT_RELEASE_TAP }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Wait for CI to pass
+        run: gh pr checks "$PR_NUMBER" --watch --fail-fast
+
+      - name: Merge release PR
+        run: gh pr merge "$PR_NUMBER" --merge --delete-branch
