@@ -282,17 +282,18 @@ impl Update {
 }
 
 fn total_block_height(logs: &[LogEntry], start: usize, end: usize) -> usize {
-    logs[start..=end]
-        .iter()
-        .map(|entry| entry.graph_lines.len().max(1))
-        .sum()
+    logs[start..=end].iter().map(log_entry_height).sum()
+}
+
+fn log_entry_height(_: &LogEntry) -> usize {
+    2
 }
 
 fn max_graph_prefix_width(logs_state: &LoadState<Vec<LogEntry>>) -> usize {
     match logs_state {
         LoadState::Ready(logs) => logs
             .iter()
-            .filter_map(|entry| entry.graph_lines.first())
+            .flat_map(|entry| entry.graph_lines.iter())
             .map(|line| UnicodeWidthStr::width(line.as_str()))
             .max()
             .unwrap_or(0),
@@ -327,6 +328,22 @@ mod tests {
             },
             LogEntry {
                 graph_lines: vec!["◆  ".to_string(), "│".to_string(), "~".to_string()],
+                ..LogEntry::default()
+            },
+        ];
+
+        assert_eq!(total_block_height(&logs, 0, 1), 4);
+    }
+
+    #[test]
+    fn block_height_reserves_two_rows_per_commit() {
+        let logs = vec![
+            LogEntry {
+                graph_lines: vec!["@  ".to_string()],
+                ..LogEntry::default()
+            },
+            LogEntry {
+                graph_lines: vec!["○  ".to_string()],
                 ..LogEntry::default()
             },
         ];

@@ -119,37 +119,86 @@ fn build_log_lines(
     let mut lines = Vec::new();
 
     for (index, entry) in logs.iter().enumerate().skip(top) {
-        let row_style = if index == selected {
-            Style::default().bg(Color::DarkGray)
-        } else {
-            Style::default()
-        };
-
-        let first_prefix = entry.graph_lines.first().cloned().unwrap_or_default();
-        let padded_prefix = pad_or_truncate(&first_prefix, max_graph_prefix_width);
-        let main_spans = format_log_spans(
+        let entry_lines = build_log_entry_lines(
             entry,
-            row_style,
-            width.saturating_sub(max_graph_prefix_width),
+            index == selected,
+            index + 1 < logs.len(),
+            width,
+            max_graph_prefix_width,
         );
-        let mut spans = vec![Span::styled(padded_prefix, row_style.fg(Color::Cyan))];
-        spans.extend(main_spans);
-        lines.push(Line::from(spans));
-
-        for graph_line in entry.graph_lines.iter().skip(1) {
-            lines.push(Line::from(Span::styled(
-                graph_line.clone(),
-                row_style.fg(Color::Cyan),
-            )));
-        }
-
-        if lines.len() >= height {
-            lines.truncate(height);
+        if lines.len() + entry_lines.len() > height {
+            if lines.is_empty() {
+                lines.extend(entry_lines.into_iter().take(height));
+            }
             break;
         }
+        lines.extend(entry_lines);
     }
 
     lines
+}
+
+fn build_log_entry_lines(
+    entry: &LogEntry,
+    selected: bool,
+    has_next: bool,
+    width: usize,
+    max_graph_prefix_width: usize,
+) -> [Line<'static>; 2] {
+    let row_style = if selected {
+        Style::default().bg(Color::DarkGray)
+    } else {
+        Style::default()
+    };
+    let graph_style = row_style.fg(Color::Cyan);
+    let body_width = width.saturating_sub(max_graph_prefix_width);
+
+    let first_prefix = pad_or_truncate(
+        entry
+            .graph_lines
+            .first()
+            .map(String::as_str)
+            .unwrap_or_default(),
+        max_graph_prefix_width,
+    );
+    let mut first_spans = vec![Span::styled(first_prefix, graph_style)];
+    first_spans.extend(format_log_spans(entry, row_style, body_width));
+
+    let second_prefix = pad_or_truncate(
+        &continuation_graph_line(entry, has_next),
+        max_graph_prefix_width,
+    );
+    let comment = truncate_display_width(&description_summary(entry), body_width);
+
+    [
+        Line::from(first_spans),
+        Line::from(vec![
+            Span::styled(second_prefix, graph_style),
+            Span::styled(comment, row_style.add_modifier(Modifier::DIM)),
+        ]),
+    ]
+}
+
+fn continuation_graph_line(entry: &LogEntry, has_next: bool) -> String {
+    if let Some(line) = entry.graph_lines.get(1) {
+        return line.clone();
+    }
+    if !has_next {
+        return String::new();
+    }
+
+    entry
+        .graph_lines
+        .first()
+        .map(|line| {
+            line.chars()
+                .map(|ch| match ch {
+                    '@' | '○' | '◆' | '◉' | '◌' | '×' => '│',
+                    other => other,
+                })
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -301,6 +350,16 @@ fn format_description(entry: &LogEntry) -> String {
     format!("commit ID: {}\n\n{}", entry.commit_id, description)
 }
 
+fn description_summary(entry: &LogEntry) -> String {
+    entry
+        .description
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("(no description)")
+        .to_string()
+}
+
 fn pad_or_truncate(value: &str, width: usize) -> String {
     let mut truncated = truncate_display_width(value, width);
     let pad = width.saturating_sub(display_width(&truncated));
@@ -369,8 +428,8 @@ fn bordered_block<'a>(title: &'a str, focused: bool) -> Block<'a> {
 mod tests {
     use super::{
         AUTHOR_WIDTH, BOOKMARK_WIDTH, CHANGE_ID_WIDTH, COLUMN_GAP_WIDTH, DATE_WIDTH,
-        LOG_LINE_WIDTH, build_log_lines, display_change_id, display_width, format_description,
-        format_log_line, format_log_spans,
+        LOG_LINE_WIDTH, build_log_lines, continuation_graph_line, description_summary,
+        display_change_id, display_width, format_description, format_log_line, format_log_spans,
     };
     use crate::model::LogEntry;
     use ratatui::style::Style;
@@ -444,6 +503,7 @@ mod tests {
                 change_id_rest: "bbbb".to_string(),
                 date: "260101T01:01".to_string(),
                 author: "alice".to_string(),
+                description: "first".to_string(),
                 graph_lines: vec!["@  ".to_string()],
                 ..LogEntry::default()
             },
@@ -452,6 +512,7 @@ mod tests {
                 change_id_rest: "dddd".to_string(),
                 date: "260101T01:01".to_string(),
                 author: "bob".to_string(),
+                description: "second".to_string(),
                 graph_lines: vec!["├─╮ ".to_string()],
                 ..LogEntry::default()
             },
@@ -466,14 +527,63 @@ mod tests {
         let first_pos = rendered[0]
             .find("aaaabbbb")
             .expect("first change id should exist");
-        let second_pos = rendered[1]
+        let second_pos = rendered[2]
             .find("ccccdddd")
             .expect("second change id should exist");
 
         assert_eq!(
             display_width(&rendered[0][..first_pos]),
-            display_width(&rendered[1][..second_pos])
+            display_width(&rendered[2][..second_pos])
         );
+    }
+
+    #[test]
+    fn build_log_lines_shows_description_summary_on_second_line() {
+        let logs = vec![LogEntry {
+            description: "subject\nbody".to_string(),
+            graph_lines: vec!["@  ".to_string(), "│  ".to_string()],
+            ..LogEntry::default()
+        }];
+
+        let lines = build_log_lines(&logs, 0, 0, 80, 4, 3);
+        let rendered = lines
+            .into_iter()
+            .map(|line| line.to_string())
+            .collect::<Vec<_>>();
+
+        assert_eq!(rendered.len(), 2);
+        assert!(rendered[1].contains("subject"));
+        assert!(!rendered[1].contains("body"));
+    }
+
+    #[test]
+    fn continuation_graph_line_synthesizes_vertical_edge_for_linear_history() {
+        let entry = LogEntry {
+            graph_lines: vec!["│ ◆  ".to_string()],
+            ..LogEntry::default()
+        };
+
+        assert_eq!(continuation_graph_line(&entry, true), "│ │  ");
+    }
+
+    #[test]
+    fn continuation_graph_line_is_empty_for_last_entry_without_extra_graph_line() {
+        let entry = LogEntry {
+            graph_lines: vec!["◆  ".to_string()],
+            ..LogEntry::default()
+        };
+
+        assert_eq!(continuation_graph_line(&entry, false), "");
+    }
+
+    #[test]
+    fn description_summary_uses_first_non_empty_line() {
+        let entry = LogEntry {
+            description: "\n\nsubject\nbody".to_string(),
+            ..LogEntry::default()
+        };
+
+        assert_eq!(description_summary(&entry), "subject");
     }
 
     #[test]
