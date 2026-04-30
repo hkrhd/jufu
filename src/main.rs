@@ -9,7 +9,7 @@ use anyhow::Result;
 use clap::Parser;
 use crossterm::event;
 
-use crate::app::{App, BackgroundEvent, CommandSender, ControlFlow};
+use crate::app::{App, BackgroundEvent, CommandSender, ControlFlow, Effect};
 use crate::model::AppConfig;
 
 #[derive(Debug, Parser)]
@@ -35,18 +35,25 @@ async fn run(terminal: &mut ui::Terminal, config: AppConfig) -> Result<()> {
     let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<BackgroundEvent>();
     let mut app = App::new(config);
 
-    spawn_log_load(&sender, app.config().repo_path.clone());
+    run_effects(
+        &sender,
+        app.config().repo_path.clone(),
+        app.startup_effects(),
+    );
 
     loop {
         while let Ok(message) = receiver.try_recv() {
-            app.apply_background_event(message, &sender);
+            let effects = app.apply_background_event(message);
+            run_effects(&sender, app.config().repo_path.clone(), effects);
         }
 
         terminal.draw(|frame| ui::render(frame, &mut app))?;
 
         if event::poll(Duration::from_millis(100))? {
             let event = event::read()?;
-            if matches!(app.handle_event(event, &sender), ControlFlow::Exit) {
+            let update = app.handle_event(event);
+            run_effects(&sender, app.config().repo_path.clone(), update.effects);
+            if matches!(update.control_flow, ControlFlow::Exit) {
                 break;
             }
         }
@@ -55,10 +62,27 @@ async fn run(terminal: &mut ui::Terminal, config: AppConfig) -> Result<()> {
     Ok(())
 }
 
-fn spawn_log_load(sender: &CommandSender, repo_path: std::path::PathBuf) {
+fn run_effects(sender: &CommandSender, repo_path: std::path::PathBuf, effects: Vec<Effect>) {
+    for effect in effects {
+        spawn_effect(sender, repo_path.clone(), effect);
+    }
+}
+
+fn spawn_effect(sender: &CommandSender, repo_path: std::path::PathBuf, effect: Effect) {
     let tx = sender.clone();
-    tokio::spawn(async move {
-        let result = jj::load_logs(&repo_path).await;
-        let _ = tx.send(BackgroundEvent::LogsLoaded(result));
-    });
+
+    match effect {
+        Effect::LoadLogs => {
+            tokio::spawn(async move {
+                let result = jj::load_logs(&repo_path).await;
+                let _ = tx.send(BackgroundEvent::LogsLoaded(result));
+            });
+        }
+        Effect::LoadDiff { change_id } => {
+            tokio::spawn(async move {
+                let result = jj::load_diff_stat(&repo_path, &change_id).await;
+                let _ = tx.send(BackgroundEvent::DiffLoaded { change_id, result });
+            });
+        }
+    }
 }

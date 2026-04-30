@@ -46,6 +46,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         .split(areas[1]);
 
     app.set_left_height(areas[0]);
+    app.set_diff_height(right[1]);
     render_log_list(frame, areas[0], app);
     render_description(frame, right[0], app);
     render_diff(frame, right[1], app);
@@ -75,6 +76,7 @@ fn render_log_list(frame: &mut Frame, area: Rect, app: &App) {
                 app.log_top,
                 inner.width as usize,
                 inner.height as usize,
+                app.max_graph_prefix_width,
             );
             frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), inner);
         }
@@ -112,14 +114,9 @@ fn build_log_lines(
     top: usize,
     width: usize,
     height: usize,
+    max_graph_prefix_width: usize,
 ) -> Vec<Line<'static>> {
     let mut lines = Vec::new();
-    let max_graph_prefix_width = logs
-        .iter()
-        .filter_map(|entry| entry.graph_lines.first())
-        .map(|line| display_width(line))
-        .max()
-        .unwrap_or(0);
 
     for (index, entry) in logs.iter().enumerate().skip(top) {
         let row_style = if index == selected {
@@ -460,7 +457,7 @@ mod tests {
             },
         ];
 
-        let lines = build_log_lines(&logs, 0, 0, 80, 10);
+        let lines = build_log_lines(&logs, 0, 0, 80, 10, 4);
         let rendered = lines
             .into_iter()
             .map(|line| line.to_string())
